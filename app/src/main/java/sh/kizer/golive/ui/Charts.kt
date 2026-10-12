@@ -115,7 +115,6 @@ fun TrendChart(
     val use24h = DateFormat.is24HourFormat(LocalContext.current)
     val w = trend.window
     val buckets = trend.smoothed
-    val curved = trend.options.curved
     val convert = { v: Double -> trend.metric.display(v, units) }
     val timeTicks = remember(trend, use24h) { Axis.timeTicks(trend.range, w.from, w.to, ZoneId.systemDefault(), use24h) }
     val (lo, hi) = remember(trend, units) {
@@ -182,12 +181,12 @@ fun TrendChart(
                 continue
             }
             val band = Path().apply {
-                through(run.map { Offset(xb(it), y(it.max)) }, curved, move = true)
-                through(run.asReversed().map { Offset(xb(it), y(it.min)) }, curved, move = false)
+                through(run.map { Offset(xb(it), y(it.max)) }, curved = true, move = true)
+                through(run.asReversed().map { Offset(xb(it), y(it.min)) }, curved = true, move = false)
                 close()
             }
             drawPath(band, colors.primary.copy(alpha = 0.16f))
-            val line = Path().apply { through(run.map { Offset(xb(it), y(it.avg)) }, curved, move = true) }
+            val line = Path().apply { through(run.map { Offset(xb(it), y(it.avg)) }, curved = true, move = true) }
             drawPath(line, colors.primary, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
 

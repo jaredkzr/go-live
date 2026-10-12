@@ -25,7 +25,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -38,11 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.kizer.golive.Bucket
-import sh.kizer.golive.ChartOptions
 import sh.kizer.golive.Resampling
-import sh.kizer.golive.Resolution
-import sh.kizer.golive.SmoothingMethod
-import sh.kizer.golive.SmoothingStrength
 import sh.kizer.golive.Metric
 import sh.kizer.golive.Units
 import sh.kizer.golive.TrendRange
@@ -57,7 +52,6 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
     val range by vm.trendRange.collectAsStateWithLifecycle()
     val trend by vm.trend.collectAsStateWithLifecycle()
     val units by vm.repo.units.collectAsStateWithLifecycle()
-    val options by vm.repo.chartOptions.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
@@ -122,7 +116,6 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            DisplayOptions(options) { vm.repo.setChartOptions(it) }
             t?.let {
                 Text(
                     caption(it),
@@ -135,45 +128,10 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun DisplayOptions(options: ChartOptions, onChange: (ChartOptions) -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shape = RoundedCornerShape(16.dp),
-    ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Smoothing", style = MaterialTheme.typography.titleSmall)
-            Choice(SmoothingMethod.entries.map { it.label }, options.method.ordinal) {
-                onChange(options.copy(method = SmoothingMethod.entries[it]))
-            }
-            if (options.method != SmoothingMethod.NONE) {
-                Choice(SmoothingStrength.entries.map { it.label }, options.strength.ordinal) {
-                    onChange(options.copy(strength = SmoothingStrength.entries[it]))
-                }
-            }
-            Text("Resolution", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
-            Choice(Resolution.entries.map { it.label }, options.resolution.ordinal) {
-                onChange(options.copy(resolution = Resolution.entries[it]))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                Text("Curved lines", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Switch(checked = options.curved, onCheckedChange = { onChange(options.copy(curved = it)) })
-            }
-        }
-    }
-}
-
-private fun caption(t: Trend): String {
-    val o = t.options
-    val smoothing = if (o.method == SmoothingMethod.NONE) {
-        "Not smoothed"
-    } else {
-        "Smoothed with ${o.method.description}, ${o.strength.window} points wide"
-    }
-    return "Each point averages ${Resampling.describe(t.window.bucketMs)}. $smoothing; the band spans the lowest " +
-        "and highest readings. The stats below use the raw readings. Touch and drag the chart to read values."
-}
+private fun caption(t: Trend): String =
+    "Each point averages ${Resampling.describe(t.window.bucketMs)}, smoothed with a light exponential moving average; " +
+        "the band spans the lowest and highest readings. The stats use the raw readings. " +
+        "Touch and drag the chart to read values."
 
 @Composable
 private fun Header(metric: Metric, trend: Trend?, selectedIndex: Int?, units: Units) {

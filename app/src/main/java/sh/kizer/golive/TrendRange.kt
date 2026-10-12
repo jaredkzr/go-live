@@ -6,7 +6,7 @@ private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
 private const val DAY = 24 * HOUR
 
-/** A chart span; the bucket size comes from the chosen Resolution (Resampling). */
+/** A chart span; the bucket size comes from Resampling. */
 enum class TrendRange(val label: String, val spanMs: Long) {
     HOUR_1("1 h", HOUR),
     HOURS_4("4 h", 4 * HOUR),
@@ -16,9 +16,8 @@ enum class TrendRange(val label: String, val spanMs: Long) {
     YEAR("1 y", 365 * DAY),
     ;
 
-    /** The window ending at [now] with the bucket size [resolution] gives. */
-    fun window(now: Long, resolution: Resolution = Resolution.NORMAL, zone: TimeZone = TimeZone.getDefault()): Window =
-        window(now, Resampling.bucketFor(spanMs, resolution.targetPoints), zone)
+    /** The window ending at [now], in Resampling's bucket size for this span. */
+    fun window(now: Long, zone: TimeZone = TimeZone.getDefault()): Window = window(now, Resampling.bucketFor(spanMs), zone)
 
     /**
      * The window ending at [now] in buckets of [bucketMs], aligned to local

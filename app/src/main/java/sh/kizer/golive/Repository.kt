@@ -72,30 +72,6 @@ class Repository(context: Context) {
     )
     val deviceUnits: StateFlow<Units?> = _deviceUnits.asStateFlow()
 
-    /** How the trend chart resamples and smooths. */
-    private val _chartOptions = MutableStateFlow(
-        ChartOptions(
-            method = enumPref(KEY_SMOOTHING, ChartOptions().method),
-            strength = enumPref(KEY_STRENGTH, ChartOptions().strength),
-            resolution = enumPref(KEY_RESOLUTION, ChartOptions().resolution),
-            curved = prefs.getBoolean(KEY_CURVED, ChartOptions().curved),
-        ),
-    )
-    val chartOptions: StateFlow<ChartOptions> = _chartOptions.asStateFlow()
-
-    fun setChartOptions(options: ChartOptions) {
-        _chartOptions.value = options
-        prefs.edit {
-            putString(KEY_SMOOTHING, options.method.name)
-            putString(KEY_STRENGTH, options.strength.name)
-            putString(KEY_RESOLUTION, options.resolution.name)
-            putBoolean(KEY_CURVED, options.curved)
-        }
-    }
-
-    private inline fun <reified E : Enum<E>> enumPref(key: String, default: E): E =
-        prefs.getString(key, null)?.let { name -> enumValues<E>().firstOrNull { it.name == name } } ?: default
-
     /** The units everything is shown in. */
     private val _units = MutableStateFlow(currentUnits())
     val units: StateFlow<Units> = _units.asStateFlow()
@@ -230,10 +206,6 @@ class Repository(context: Context) {
 
     companion object {
         private const val KEY_COLLECTING = "collecting"
-        private const val KEY_SMOOTHING = "chart_smoothing"
-        private const val KEY_STRENGTH = "chart_strength"
-        private const val KEY_RESOLUTION = "chart_resolution"
-        private const val KEY_CURVED = "chart_curved"
         private const val KEY_FAHRENHEIT = "fahrenheit"
         private const val KEY_PM_US_AQI = "pm_us_aqi"
         private const val KEY_FOLLOW_DEVICE = "follow_device"

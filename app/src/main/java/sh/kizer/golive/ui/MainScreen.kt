@@ -40,12 +40,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import sh.kizer.golive.Bucket
 import sh.kizer.golive.Live
 import sh.kizer.golive.Metric
 import sh.kizer.golive.Units
 import sh.kizer.golive.ScanStatus
-import sh.kizer.golive.TrendRange
 
 private const val STALE_MS = 3 * 60 * 1000L
 
@@ -67,7 +65,6 @@ fun MainScreen(
     val sparklines by vm.sparklines.collectAsStateWithLifecycle()
     val now by vm.now.collectAsStateWithLifecycle()
     val stale = latest?.let { now - it.time > STALE_MS } ?: false
-    val sparkWindow = TrendRange.DAY_1.window(now)
 
     Scaffold(
         topBar = {
@@ -96,9 +93,7 @@ fun MainScreen(
                     metric = metric,
                     value = latest?.value(metric),
                     units = units,
-                    spark = sparklines[metric].orEmpty(),
-                    sparkFrom = sparkWindow.from,
-                    sparkTo = sparkWindow.to,
+                    spark = sparklines[metric],
                     wide = metric == Metric.PM25,
                     dimmed = stale,
                     onClick = { onOpenTrend(metric) },
@@ -168,9 +163,7 @@ private fun MetricTile(
     metric: Metric,
     value: Double?,
     units: Units,
-    spark: List<Bucket>,
-    sparkFrom: Long,
-    sparkTo: Long,
+    spark: Spark?,
     wide: Boolean,
     dimmed: Boolean,
     onClick: () -> Unit,
@@ -211,7 +204,9 @@ private fun MetricTile(
                 }
             }
             Box(Modifier.fillMaxWidth().height(if (wide) 56.dp else 36.dp).padding(top = 6.dp)) {
-                Sparkline(spark, 15 * 60 * 1000L, sparkFrom, sparkTo, Modifier.fillMaxWidth().height(if (wide) 50.dp else 30.dp))
+                spark?.let {
+                    Sparkline(it.buckets, it.window.bucketMs, it.window.from, it.window.to, Modifier.fillMaxWidth().height(if (wide) 50.dp else 30.dp))
+                }
             }
         }
     }
