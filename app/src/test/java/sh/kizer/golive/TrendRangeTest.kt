@@ -28,10 +28,10 @@ class TrendRangeTest {
     }
 
     @Test
-    fun everyRangeHasAboutThreeHundredBuckets() {
+    fun bucketsStayBetweenSixtyAndFourHundred() {
         for (r in TrendRange.entries) {
             val n = r.spanMs / r.bucketMs
-            assertEquals("${r.name} has $n buckets", true, n in 250..400)
+            assertEquals("${r.name} has $n buckets", true, n in 60..400)
         }
     }
 }

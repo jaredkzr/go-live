@@ -6,8 +6,13 @@ private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
 private const val DAY = 24 * HOUR
 
-/** A chart span and the bucket size that keeps it around 300 points. */
+/**
+ * A chart span and its bucket size: about 300 points for the long spans, and
+ * one-minute buckets (about one measurement each) for the short ones.
+ */
 enum class TrendRange(val label: String, val spanMs: Long, val bucketMs: Long) {
+    HOUR_1("1 h", HOUR, MINUTE),
+    HOURS_4("4 h", 4 * HOUR, MINUTE),
     DAY_1("24 h", DAY, 5 * MINUTE),
     WEEK("7 d", 7 * DAY, 30 * MINUTE),
     MONTH("30 d", 30 * DAY, 2 * HOUR),

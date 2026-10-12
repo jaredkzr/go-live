@@ -49,6 +49,16 @@ object Axis {
     fun timeTicks(range: TrendRange, from: Long, to: Long, zone: ZoneId, use24h: Boolean, locale: Locale = Locale.getDefault()): List<TimeTick> {
         val start = Instant.ofEpochMilli(from).atZone(zone)
         val (first: ZonedDateTime, step: (ZonedDateTime) -> ZonedDateTime, format: DateTimeFormatter) = when (range) {
+            TrendRange.HOUR_1 -> Triple(
+                start.truncatedTo(ChronoUnit.HOURS).let { h -> generateSequence(h) { it.plusMinutes(15) }.first { !it.isBefore(start) } },
+                { t: ZonedDateTime -> t.plusMinutes(15) },
+                DateTimeFormatter.ofPattern(if (use24h) "HH:mm" else "h:mm", locale),
+            )
+            TrendRange.HOURS_4 -> Triple(
+                start.truncatedTo(ChronoUnit.HOURS).plusHours(1),
+                { t: ZonedDateTime -> t.plusHours(1) },
+                DateTimeFormatter.ofPattern(if (use24h) "HH:mm" else "h a", locale),
+            )
             TrendRange.DAY_1 -> Triple(
                 start.truncatedTo(ChronoUnit.DAYS).let { d -> generateSequence(d) { it.plusHours(6) }.first { !it.isBefore(start) } },
                 { t: ZonedDateTime -> t.plusHours(6) },

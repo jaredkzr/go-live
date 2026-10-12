@@ -78,7 +78,8 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                         selected = r == range,
                         onClick = { vm.trendRange.value = r; selected = null },
                         shape = SegmentedButtonDefaults.itemShape(i, TrendRange.entries.size),
-                        label = { Text(r.label) },
+                        icon = {}, // no check mark: six labels share the row
+                        label = { Text(r.label, maxLines = 1, softWrap = false) },
                     )
                 }
             }
@@ -161,6 +162,7 @@ private fun bucketTime(trend: Trend, b: Bucket): String {
 }
 
 private fun bucketName(range: TrendRange) = when (range) {
+    TrendRange.HOUR_1, TrendRange.HOURS_4 -> "a minute"
     TrendRange.DAY_1 -> "5 minutes"
     TrendRange.WEEK -> "30 minutes"
     TrendRange.MONTH -> "2 hours"
@@ -168,6 +170,8 @@ private fun bucketName(range: TrendRange) = when (range) {
 }
 
 private fun rangeName(range: TrendRange) = when (range) {
+    TrendRange.HOUR_1 -> "the last hour"
+    TrendRange.HOURS_4 -> "the last 4 hours"
     TrendRange.DAY_1 -> "the last 24 hours"
     TrendRange.WEEK -> "the last 7 days"
     TrendRange.MONTH -> "the last 30 days"

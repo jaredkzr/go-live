@@ -31,6 +31,20 @@ class AxisTest {
     }
 
     @Test
+    fun hourTicksEveryQuarterHour() {
+        val from = ZonedDateTime.of(2026, 10, 11, 14, 7, 0, 0, zone).toInstant().toEpochMilli()
+        val ticks = Axis.timeTicks(TrendRange.HOUR_1, from, from + 3_600_000, zone, use24h = false, Locale.US)
+        assertEquals(listOf("2:15", "2:30", "2:45", "3:00"), ticks.map { it.label })
+    }
+
+    @Test
+    fun fourHourTicksEveryHour() {
+        val from = ZonedDateTime.of(2026, 10, 11, 14, 7, 0, 0, zone).toInstant().toEpochMilli()
+        val ticks = Axis.timeTicks(TrendRange.HOURS_4, from, from + 4 * 3_600_000, zone, use24h = true, Locale.US)
+        assertEquals(listOf("15:00", "16:00", "17:00", "18:00"), ticks.map { it.label })
+    }
+
+    @Test
     fun yearTicksEveryOtherMonth() {
         val ticks = Axis.timeTicks(TrendRange.YEAR, ms(2025, 10, 12), ms(2026, 10, 12), zone, use24h = false, Locale.US)
         assertEquals(listOf("Nov", "Jan", "Mar", "May", "Jul", "Sep"), ticks.map { it.label })
