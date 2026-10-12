@@ -110,25 +110,32 @@ enum class Metric(
 
     fun band(value: Double): Band? = bands.firstOrNull { value <= it.upTo }
 
-    fun unit(fahrenheit: Boolean): String = if (this == TEMPERATURE && fahrenheit) "°F" else unit
+    fun unit(units: Units): String = when {
+        this == TEMPERATURE && units.fahrenheit -> "°F"
+        this == PM25 && units.pmUsAqi -> "US AQI"
+        else -> unit
+    }
 
-    /** Converts a stored value to the unit shown. */
-    fun display(value: Double, fahrenheit: Boolean): Double =
-        if (this == TEMPERATURE && fahrenheit) value * 9 / 5 + 32 else value
+    /** Converts a stored value (°C, µg/m³) to the unit shown. */
+    fun display(value: Double, units: Units): Double = when {
+        this == TEMPERATURE && units.fahrenheit -> value * 9 / 5 + 32
+        this == PM25 && units.pmUsAqi -> Aqi.fromPm25(value).toDouble()
+        else -> value
+    }
 
     /** The number as shown, without the unit. */
-    fun format(value: Double, fahrenheit: Boolean): String {
-        val v = display(value, fahrenheit)
+    fun format(value: Double, units: Units): String {
+        val v = display(value, units)
         return if (decimals == 0) v.roundToLong().toString() else String.format(Locale.getDefault(), "%.${decimals}f", v)
     }
 
     /** The number and unit, for one-line summaries. */
-    fun formatWithUnit(value: Double, fahrenheit: Boolean): String {
-        val u = unit(fahrenheit)
+    fun formatWithUnit(value: Double, units: Units): String {
+        val u = unit(units)
         return when {
-            u.isEmpty() -> format(value, fahrenheit)
-            u.startsWith("°") || u == "%" -> format(value, fahrenheit) + u
-            else -> format(value, fahrenheit) + " " + u
+            u.isEmpty() -> format(value, units)
+            u.startsWith("°") || u == "%" -> format(value, units) + u
+            else -> format(value, units) + " " + u
         }
     }
 }

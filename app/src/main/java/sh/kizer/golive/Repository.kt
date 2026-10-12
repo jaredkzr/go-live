@@ -53,8 +53,31 @@ class Repository(context: Context) {
     private val _collecting = MutableStateFlow(prefs.getBoolean(KEY_COLLECTING, true))
     val collecting: StateFlow<Boolean> = _collecting.asStateFlow()
 
-    private val _fahrenheit = MutableStateFlow(prefs.getBoolean(KEY_FAHRENHEIT, false))
-    val fahrenheit: StateFlow<Boolean> = _fahrenheit.asStateFlow()
+    /** Show readings in the Go's units (true) or in [manualUnits]. */
+    private val _followDevice = MutableStateFlow(prefs.getBoolean(KEY_FOLLOW_DEVICE, true))
+    val followDevice: StateFlow<Boolean> = _followDevice.asStateFlow()
+
+    private val _manualUnits = MutableStateFlow(
+        Units(prefs.getBoolean(KEY_FAHRENHEIT, false), prefs.getBoolean(KEY_PM_US_AQI, false)),
+    )
+    val manualUnits: StateFlow<Units> = _manualUnits.asStateFlow()
+
+    /** The units the Go last reported, or null before it has (older firmware never does). */
+    private val _deviceUnits = MutableStateFlow(
+        if (prefs.contains(KEY_DEVICE_FAHRENHEIT)) {
+            Units(prefs.getBoolean(KEY_DEVICE_FAHRENHEIT, false), prefs.getBoolean(KEY_DEVICE_PM_US_AQI, false))
+        } else {
+            null
+        },
+    )
+    val deviceUnits: StateFlow<Units?> = _deviceUnits.asStateFlow()
+
+    /** The units everything is shown in. */
+    private val _units = MutableStateFlow(currentUnits())
+    val units: StateFlow<Units> = _units.asStateFlow()
+
+    private fun currentUnits(): Units =
+        if (_followDevice.value) _deviceUnits.value ?: _manualUnits.value else _manualUnits.value
 
     /** The Go's Bluetooth address, picked from the first broadcast that looks like a Go. */
     private val _device = MutableStateFlow(prefs.getString(KEY_DEVICE, null))
@@ -117,9 +140,31 @@ class Repository(context: Context) {
         prefs.edit { putBoolean(KEY_COLLECTING, on) }
     }
 
-    fun setFahrenheit(on: Boolean) {
-        _fahrenheit.value = on
-        prefs.edit { putBoolean(KEY_FAHRENHEIT, on) }
+    fun setFollowDevice(on: Boolean) {
+        _followDevice.value = on
+        prefs.edit { putBoolean(KEY_FOLLOW_DEVICE, on) }
+        _units.value = currentUnits()
+    }
+
+    fun setManualUnits(units: Units) {
+        _manualUnits.value = units
+        prefs.edit {
+            putBoolean(KEY_FAHRENHEIT, units.fahrenheit)
+            putBoolean(KEY_PM_US_AQI, units.pmUsAqi)
+        }
+        _units.value = currentUnits()
+    }
+
+    /** The Go's units from its scan response; returns true when they changed. */
+    fun onDeviceUnits(address: String, units: Units): Boolean {
+        if (address != _device.value || units == _deviceUnits.value) return false
+        _deviceUnits.value = units
+        prefs.edit {
+            putBoolean(KEY_DEVICE_FAHRENHEIT, units.fahrenheit)
+            putBoolean(KEY_DEVICE_PM_US_AQI, units.pmUsAqi)
+        }
+        _units.value = currentUnits()
+        return true
     }
 
     private fun setDevice(address: String?) {
@@ -131,6 +176,12 @@ class Repository(context: Context) {
     fun forgetDevice() {
         synchronized(filter) { setDevice(null) }
         _live.value = null
+        _deviceUnits.value = null
+        prefs.edit {
+            remove(KEY_DEVICE_FAHRENHEIT)
+            remove(KEY_DEVICE_PM_US_AQI)
+        }
+        _units.value = currentUnits()
     }
 
     /** Runs on the writer thread. */
@@ -156,6 +207,10 @@ class Repository(context: Context) {
     companion object {
         private const val KEY_COLLECTING = "collecting"
         private const val KEY_FAHRENHEIT = "fahrenheit"
+        private const val KEY_PM_US_AQI = "pm_us_aqi"
+        private const val KEY_FOLLOW_DEVICE = "follow_device"
+        private const val KEY_DEVICE_FAHRENHEIT = "device_fahrenheit"
+        private const val KEY_DEVICE_PM_US_AQI = "device_pm_us_aqi"
         private const val KEY_DEVICE = "device"
         private const val BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }

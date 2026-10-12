@@ -33,6 +33,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -50,6 +51,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import sh.kizer.golive.Units
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -60,7 +62,9 @@ private const val FIRMWARE_URL = "https://github.com/jaredkzr/firmware-core"
 @Composable
 fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
-    val fahrenheit by vm.repo.fahrenheit.collectAsStateWithLifecycle()
+    val followDevice by vm.repo.followDevice.collectAsStateWithLifecycle()
+    val deviceUnits by vm.repo.deviceUnits.collectAsStateWithLifecycle()
+    val manualUnits by vm.repo.manualUnits.collectAsStateWithLifecycle()
     val device by vm.repo.device.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val exportMessage by vm.exportMessage.collectAsStateWithLifecycle()
@@ -94,15 +98,24 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Section("Temperature") {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    listOf(false to "°C", true to "°F").forEachIndexed { i, (f, label) ->
-                        SegmentedButton(
-                            selected = fahrenheit == f,
-                            onClick = { vm.repo.setFahrenheit(f) },
-                            shape = SegmentedButtonDefaults.itemShape(i, 2),
-                            label = { Text(label) },
+            Section("Units") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Match the Go", style = MaterialTheme.typography.bodyLarge)
+                        Body(
+                            deviceUnits?.let { "The Go shows ${describe(it)}." }
+                                ?: "The Go hasn't reported its units yet; this needs the custom firmware from October 2026 or later.",
                         )
+                    }
+                    Switch(checked = followDevice, onCheckedChange = vm.repo::setFollowDevice)
+                }
+                // Manual units apply when not matching, or until the Go reports its own.
+                if (!followDevice || deviceUnits == null) {
+                    Choice(listOf("°C", "°F"), if (manualUnits.fahrenheit) 1 else 0) {
+                        vm.repo.setManualUnits(manualUnits.copy(fahrenheit = it == 1))
+                    }
+                    Choice(listOf("µg/m³", "US AQI"), if (manualUnits.pmUsAqi) 1 else 0) {
+                        vm.repo.setManualUnits(manualUnits.copy(pmUsAqi = it == 1))
                     }
                 }
             }
@@ -184,6 +197,23 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         )
     }
 }
+
+@Composable
+private fun Choice(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        labels.forEachIndexed { i, label ->
+            SegmentedButton(
+                selected = i == selected,
+                onClick = { onSelect(i) },
+                shape = SegmentedButtonDefaults.itemShape(i, labels.size),
+                label = { Text(label) },
+            )
+        }
+    }
+}
+
+private fun describe(units: Units) =
+    (if (units.fahrenheit) "°F" else "°C") + " and PM2.5 in " + (if (units.pmUsAqi) "US AQI" else "µg/m³")
 
 @Composable
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {

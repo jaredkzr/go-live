@@ -22,7 +22,7 @@ object Notifications {
     }
 
     fun build(context: Context, repo: Repository): android.app.Notification {
-        val f = repo.fahrenheit.value
+        val f = repo.units.value
         val r = repo.latest.value
         val (title, text) = when (repo.status.value) {
             ScanStatus.BluetoothOff -> "Bluetooth is off" to "Readings resume when Bluetooth is back on."
@@ -60,7 +60,7 @@ object Notifications {
         context.getSystemService(NotificationManager::class.java).notify(ID, build(context, repo))
     }
 
-    private fun summary(r: Reading, fahrenheit: Boolean, metrics: List<Metric>) =
+    private fun summary(r: Reading, units: Units, metrics: List<Metric>) =
         metrics.mapNotNull { m ->
             r.value(m)?.let { v ->
                 val label = when (m) {
@@ -69,7 +69,7 @@ object Notifications {
                     Metric.PM25, Metric.CO2 -> m.label + " "
                     else -> ""
                 }
-                label + m.formatWithUnit(v, fahrenheit)
+                label + m.formatWithUnit(v, units)
             }
         }.joinToString(" · ")
 }

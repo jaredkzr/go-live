@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.kizer.golive.Bucket
 import sh.kizer.golive.Live
 import sh.kizer.golive.Metric
+import sh.kizer.golive.Units
 import sh.kizer.golive.ScanStatus
 import sh.kizer.golive.TrendRange
 
@@ -62,7 +63,7 @@ fun MainScreen(
     val live by vm.repo.live.collectAsStateWithLifecycle()
     val status by vm.repo.status.collectAsStateWithLifecycle()
     val collecting by vm.repo.collecting.collectAsStateWithLifecycle()
-    val fahrenheit by vm.repo.fahrenheit.collectAsStateWithLifecycle()
+    val units by vm.repo.units.collectAsStateWithLifecycle()
     val sparklines by vm.sparklines.collectAsStateWithLifecycle()
     val now by vm.now.collectAsStateWithLifecycle()
     val stale = latest?.let { now - it.time > STALE_MS } ?: false
@@ -94,7 +95,7 @@ fun MainScreen(
                 MetricTile(
                     metric = metric,
                     value = latest?.value(metric),
-                    fahrenheit = fahrenheit,
+                    units = units,
                     spark = sparklines[metric].orEmpty(),
                     sparkFrom = sparkWindow.from,
                     sparkTo = sparkWindow.to,
@@ -166,7 +167,7 @@ private fun StatusCard(
 private fun MetricTile(
     metric: Metric,
     value: Double?,
-    fahrenheit: Boolean,
+    units: Units,
     spark: List<Bucket>,
     sparkFrom: Long,
     sparkTo: Long,
@@ -194,12 +195,12 @@ private fun MetricTile(
             Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 2.dp)) {
                 val color = if (dimmed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 Text(
-                    value?.let { metric.format(it, fahrenheit) } ?: "—",
+                    value?.let { metric.format(it, units) } ?: "—",
                     fontSize = if (wide) 44.sp else 30.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = color,
                 )
-                val unit = metric.unit(fahrenheit)
+                val unit = metric.unit(units)
                 if (value != null && unit.isNotEmpty()) {
                     Text(
                         unit,

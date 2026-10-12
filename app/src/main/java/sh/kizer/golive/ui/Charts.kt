@@ -24,6 +24,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import sh.kizer.golive.Axis
 import sh.kizer.golive.Bucket
+import sh.kizer.golive.Units
 import java.time.ZoneId
 import kotlin.math.abs
 
@@ -73,7 +74,7 @@ fun Sparkline(buckets: List<Bucket>, bucketMs: Long, from: Long, to: Long, modif
 @Composable
 fun TrendChart(
     trend: Trend,
-    fahrenheit: Boolean,
+    units: Units,
     selected: Int?,
     onSelect: (Int?) -> Unit,
     modifier: Modifier = Modifier,
@@ -84,9 +85,9 @@ fun TrendChart(
     val use24h = DateFormat.is24HourFormat(LocalContext.current)
     val w = trend.window
     val buckets = trend.buckets
-    val convert = { v: Double -> trend.metric.display(v, fahrenheit) }
+    val convert = { v: Double -> trend.metric.display(v, units) }
     val timeTicks = remember(trend, use24h) { Axis.timeTicks(trend.range, w.from, w.to, ZoneId.systemDefault(), use24h) }
-    val (lo, hi) = remember(trend, fahrenheit) {
+    val (lo, hi) = remember(trend, units) {
         if (buckets.isEmpty()) {
             0.0 to 1.0
         } else {

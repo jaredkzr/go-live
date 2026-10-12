@@ -14,8 +14,8 @@ class MetricTest {
 
     @Test
     fun temperatureConvertsToFahrenheit() {
-        assertEquals(74.228, Metric.TEMPERATURE.display(23.46, fahrenheit = true), 1e-9)
-        assertEquals("°F", Metric.TEMPERATURE.unit(fahrenheit = true))
-        assertEquals("µg/m³", Metric.PM25.unit(fahrenheit = true))
+        assertEquals(74.228, Metric.TEMPERATURE.display(23.46, Units(fahrenheit = true)), 1e-9)
+        assertEquals("°F", Metric.TEMPERATURE.unit(Units(fahrenheit = true)))
+        assertEquals("µg/m³", Metric.PM25.unit(Units(fahrenheit = true)))
     }
 }

@@ -144,11 +144,14 @@ class ScanService : Service() {
         val packet = Bthome.decode(data) ?: return
         val device = repo.device.value
         val stored = repo.onBroadcast(result.device.address, result.rssi, packet, System.currentTimeMillis())
+        // Present when the scan response was received (firmware with the units scan response).
+        val units = Units.decode(result.scanRecord?.getManufacturerSpecificData(Units.COMPANY_ID))
+        val unitsChanged = units != null && repo.onDeviceUnits(result.device.address, units)
         if (device == null && repo.device.value != null) {
             // Just locked onto the Go: narrow the hardware filter to it.
             handler.post { restartScan() }
         }
-        if (stored != null) Notifications.update(this, repo)
+        if (stored != null || unitsChanged) Notifications.update(this, repo)
     }
 
     private val bluetoothState = object : BroadcastReceiver() {

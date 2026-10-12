@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.kizer.golive.Bucket
 import sh.kizer.golive.Metric
+import sh.kizer.golive.Units
 import sh.kizer.golive.TrendRange
 import java.time.Instant
 import java.time.ZoneId
@@ -49,7 +50,7 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
     val metric by vm.trendMetric.collectAsStateWithLifecycle()
     val range by vm.trendRange.collectAsStateWithLifecycle()
     val trend by vm.trend.collectAsStateWithLifecycle()
-    val fahrenheit by vm.repo.fahrenheit.collectAsStateWithLifecycle()
+    val units by vm.repo.units.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
@@ -90,12 +91,12 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
             ) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 10.dp)) {
                     val sel = t?.buckets?.getOrNull(selected ?: -1)
-                    Header(metric, t, sel, fahrenheit)
+                    Header(metric, t, sel, units)
                     Box(Modifier.fillMaxWidth().height(260.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
                         when {
                             t == null -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             t.buckets.isEmpty() -> Text("No readings in this range yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            else -> TrendChart(t, fahrenheit, selected, { selected = it }, Modifier.fillMaxSize())
+                            else -> TrendChart(t, units, selected, { selected = it }, Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -107,9 +108,9 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Row(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Stat("Average", metric.formatWithUnit(s.avg, fahrenheit), Modifier.weight(1f))
-                        Stat("Low", metric.formatWithUnit(s.min, fahrenheit), Modifier.weight(1f))
-                        Stat("High", metric.formatWithUnit(s.max, fahrenheit), Modifier.weight(1f))
+                        Stat("Average", metric.formatWithUnit(s.avg, units), Modifier.weight(1f))
+                        Stat("Low", metric.formatWithUnit(s.min, units), Modifier.weight(1f))
+                        Stat("High", metric.formatWithUnit(s.max, units), Modifier.weight(1f))
                         Stat("Readings", s.count.toString(), Modifier.weight(1f))
                     }
                 }
@@ -126,11 +127,11 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun Header(metric: Metric, trend: Trend?, selected: Bucket?, fahrenheit: Boolean) {
+private fun Header(metric: Metric, trend: Trend?, selected: Bucket?, units: Units) {
     val (big, small) = when {
-        selected != null && trend != null -> metric.formatWithUnit(selected.avg, fahrenheit) to
-            "${bucketTime(trend, selected)} · ${metric.format(selected.min, fahrenheit)}–${metric.formatWithUnit(selected.max, fahrenheit)}"
-        trend?.summary != null -> metric.formatWithUnit(trend.summary.avg, fahrenheit) to "Average over ${rangeName(trend.range)}"
+        selected != null && trend != null -> metric.formatWithUnit(selected.avg, units) to
+            "${bucketTime(trend, selected)} · ${metric.format(selected.min, units)}–${metric.formatWithUnit(selected.max, units)}"
+        trend?.summary != null -> metric.formatWithUnit(trend.summary.avg, units) to "Average over ${rangeName(trend.range)}"
         else -> "—" to " "
     }
     Column(Modifier.padding(start = 4.dp)) {
