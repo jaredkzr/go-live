@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A year of readings is ~30 MB, over the 25 MB cloud backup limit that
+     would stop all backups, so the database stays out of cloud backup; the
+     daily gzipped copy in files/backup/ (Backup.kt) goes instead. Device
+     transfers carry everything. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer />
+</data-extraction-rules>
