@@ -72,6 +72,35 @@ class Repository(context: Context) {
     )
     val deviceUnits: StateFlow<Units?> = _deviceUnits.asStateFlow()
 
+    /** The Go's temperature correction as last read or written, and when. */
+    data class KnownCorrection(val correction: LinearCorrection, val time: Long)
+
+    private val _temperatureCorrection = MutableStateFlow(
+        if (prefs.contains(KEY_TC_TIME)) {
+            KnownCorrection(
+                LinearCorrection(
+                    custom = prefs.getBoolean(KEY_TC_CUSTOM, false),
+                    scale = prefs.getFloat(KEY_TC_SCALE, 1f).toDouble(),
+                    intercept = prefs.getFloat(KEY_TC_INTERCEPT, 0f).toDouble(),
+                ),
+                prefs.getLong(KEY_TC_TIME, 0),
+            )
+        } else {
+            null
+        },
+    )
+    val temperatureCorrection: StateFlow<KnownCorrection?> = _temperatureCorrection.asStateFlow()
+
+    fun setTemperatureCorrection(c: LinearCorrection, time: Long) {
+        _temperatureCorrection.value = KnownCorrection(c, time)
+        prefs.edit {
+            putBoolean(KEY_TC_CUSTOM, c.custom)
+            putFloat(KEY_TC_SCALE, c.scale.toFloat())
+            putFloat(KEY_TC_INTERCEPT, c.intercept.toFloat())
+            putLong(KEY_TC_TIME, time)
+        }
+    }
+
     /** The units everything is shown in. */
     private val _units = MutableStateFlow(currentUnits())
     val units: StateFlow<Units> = _units.asStateFlow()
@@ -206,6 +235,10 @@ class Repository(context: Context) {
 
     companion object {
         private const val KEY_COLLECTING = "collecting"
+        private const val KEY_TC_CUSTOM = "temp_corr_custom"
+        private const val KEY_TC_SCALE = "temp_corr_scale"
+        private const val KEY_TC_INTERCEPT = "temp_corr_intercept"
+        private const val KEY_TC_TIME = "temp_corr_time"
         private const val KEY_FAHRENHEIT = "fahrenheit"
         private const val KEY_PM_US_AQI = "pm_us_aqi"
         private const val KEY_FOLLOW_DEVICE = "follow_device"

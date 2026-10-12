@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.kizer.golive.Bucket
+import sh.kizer.golive.Cbor
+import sh.kizer.golive.GoConfig
+import sh.kizer.golive.LinearCorrection
 import sh.kizer.golive.Smoothing
 import sh.kizer.golive.Csv
 import sh.kizer.golive.Metric
@@ -25,6 +29,7 @@ import sh.kizer.golive.ReadingStore
 import sh.kizer.golive.TrendRange
 import sh.kizer.golive.Window
 import sh.kizer.golive.repository
+import kotlin.math.abs
 
 /**
  * A trend chart's data: raw buckets over a window, the same buckets smoothed
@@ -107,4 +112,67 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearData() = repo.clearData()
+
+    // ---- The Go's temperature correction (Settings) ----
+
+    sealed interface CorrectionState {
+        data object Idle : CorrectionState
+        data class Working(val message: String) : CorrectionState
+        data class Loaded(val correction: LinearCorrection) : CorrectionState
+        data class Saved(val correction: LinearCorrection) : CorrectionState
+        data class Failed(val message: String) : CorrectionState
+    }
+
+    val correction = MutableStateFlow<CorrectionState>(CorrectionState.Idle)
+    private var correctionJob: Job? = null
+
+    /** Connects to the Go and reads its temperature correction. */
+    fun readCorrection() = goConfig("Connecting to the Go…") { config ->
+        val c = config.readTemperatureCorrection()
+        repo.setTemperatureCorrection(c, System.currentTimeMillis())
+        CorrectionState.Loaded(c)
+    }
+
+    /** Sets the intercept (°C), keeping the Go's scale; zero with scale 1 turns the correction off. */
+    fun saveCorrection(current: LinearCorrection, interceptC: Double) = goConfig("Saving…") { config ->
+        val scale = if (current.custom) current.scale else 1.0
+        val wanted = if (abs(interceptC) < 0.005 && abs(scale - 1.0) < 1e-6) {
+            LinearCorrection.NONE
+        } else {
+            LinearCorrection(custom = true, scale = scale, intercept = interceptC)
+        }
+        val result = config.writeTemperatureCorrection(wanted)
+        repo.setTemperatureCorrection(result, System.currentTimeMillis())
+        if (result.custom != wanted.custom || abs(result.intercept - wanted.intercept) > 0.01) {
+            CorrectionState.Failed("The Go didn't accept the change.")
+        } else {
+            CorrectionState.Saved(result)
+        }
+    }
+
+    fun closeCorrection() {
+        correctionJob?.cancel()
+        correction.value = CorrectionState.Idle
+    }
+
+    private fun goConfig(message: String, block: suspend (GoConfig) -> CorrectionState) {
+        val address = repo.device.value
+        if (address == null) {
+            correction.value = CorrectionState.Failed("Go Live hasn't found your Go yet.")
+            return
+        }
+        correctionJob?.cancel()
+        correctionJob = viewModelScope.launch {
+            correction.value = CorrectionState.Working(message)
+            correction.value = try {
+                block(GoConfig(getApplication(), address))
+            } catch (e: GoConfig.GoConfigException) {
+                CorrectionState.Failed(e.message ?: "Something went wrong.")
+            } catch (e: SecurityException) {
+                CorrectionState.Failed("Go Live needs the Nearby devices permission to change the Go's settings.")
+            } catch (e: Cbor.FormatException) {
+                CorrectionState.Failed("The Go's reply didn't make sense (${e.message}).")
+            }
+        }
+    }
 }

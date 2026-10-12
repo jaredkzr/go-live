@@ -20,7 +20,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.KeyboardType
+import kotlin.math.abs
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -70,6 +76,13 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val exportMessage by vm.exportMessage.collectAsStateWithLifecycle()
     val backup by vm.repo.backupInfo.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    val units by vm.repo.units.collectAsStateWithLifecycle()
+    val knownCorrection by vm.repo.temperatureCorrection.collectAsStateWithLifecycle()
+    val correctionState by vm.correction.collectAsStateWithLifecycle()
+    val connectPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.readCorrection() else vm.correction.value =
+            MainViewModel.CorrectionState.Failed("Go Live needs the Nearby devices permission to change the Go's settings.")
+    }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         uri?.let(vm::export)
     }
@@ -138,6 +151,30 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
+            Section("Temperature correction") {
+                Body(
+                    knownCorrection?.let { k ->
+                        if (k.correction.custom) {
+                            "The Go corrects every temperature by ${formatOffset(k.correction.intercept, units)}" +
+                                (if (k.correction.scale != 1.0) " (scale ×${"%.3f".format(k.correction.scale)})" else "") +
+                                " (checked ${dateTime(k.time)})."
+                        } else {
+                            "The Go reports temperatures uncorrected (checked ${dateTime(k.time)})."
+                        }
+                    } ?: "The Go reads warm from its own board heat. An offset set here is stored on the Go, so its " +
+                        "screen, its broadcast and this app all show corrected temperatures.",
+                )
+                FilledTonalButton(onClick = {
+                    if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        vm.readCorrection()
+                    } else {
+                        connectPermission.launch(android.Manifest.permission.BLUETOOTH_CONNECT)
+                    }
+                }, enabled = device != null) { Text("Adjust") }
+            }
+
             Section("Device") {
                 Body(
                     device?.let { "Recording from the Go at $it. Other Bluetooth sensors nearby are ignored." }
@@ -185,6 +222,10 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         }
     }
 
+    if (correctionState != MainViewModel.CorrectionState.Idle) {
+        CorrectionDialog(correctionState, units, vm)
+    }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -216,6 +257,91 @@ fun Choice(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
 
 private fun describe(units: Units) =
     (if (units.fahrenheit) "°F" else "°C") + " and PM2.5 in " + (if (units.pmUsAqi) "US AQI" else "µg/m³")
+
+/** "−5.0 °F": a temperature difference in °C shown in the display unit. */
+private fun formatOffset(interceptC: Double, units: Units): String {
+    val v = if (units.fahrenheit) interceptC * 9 / 5 else interceptC
+    val sign = if (v < -0.005) "−" else "+"
+    return "$sign${"%.1f".format(abs(v))} ${if (units.fahrenheit) "°F" else "°C"}"
+}
+
+@Composable
+private fun CorrectionDialog(state: MainViewModel.CorrectionState, units: Units, vm: MainViewModel) {
+    val unit = if (units.fahrenheit) "°F" else "°C"
+    val toDisplay = { c: Double -> if (units.fahrenheit) c * 9 / 5 else c }
+    val toCelsius = { d: Double -> if (units.fahrenheit) d * 5 / 9 else d }
+    val loaded = (state as? MainViewModel.CorrectionState.Loaded)?.correction
+    var text by remember(loaded) {
+        mutableStateOf(loaded?.let { "%.1f".format(toDisplay(if (it.custom) it.intercept else 0.0)) } ?: "")
+    }
+    val value = text.replace(',', '.').replace('−', '-').toDoubleOrNull()
+
+    AlertDialog(
+        onDismissRequest = { vm.closeCorrection() },
+        title = { Text("Temperature correction") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (state) {
+                    is MainViewModel.CorrectionState.Working -> {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+                            Text(state.message)
+                        }
+                        Body("If the Go is asleep, unlock it: in Portable Sleep it only accepts a connection for a moment every 12 s.")
+                    }
+                    is MainViewModel.CorrectionState.Loaded -> {
+                        Body("Added to every temperature the Go measures. Negative lowers the readings.")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { text = "%.1f".format((value ?: 0.0) - 0.1) }) { Text("−0.1") }
+                            OutlinedTextField(
+                                value = text,
+                                onValueChange = { text = it },
+                                singleLine = true,
+                                suffix = { Text(unit) },
+                                isError = value == null,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { text = "%.1f".format((value ?: 0.0) + 0.1) }) { Text("+0.1") }
+                        }
+                        if (state.correction.custom && state.correction.scale != 1.0) {
+                            Body("The Go's scale of ×${"%.3f".format(state.correction.scale)} is kept.")
+                        }
+                        Body("It applies from the Go's next measurement. Readings already stored don't change.")
+                    }
+                    is MainViewModel.CorrectionState.Saved -> Body(
+                        if (state.correction.custom) {
+                            "Saved. The Go now corrects temperatures by ${formatOffset(state.correction.intercept, units)}."
+                        } else {
+                            "Saved. The Go now reports temperatures uncorrected."
+                        },
+                    )
+                    is MainViewModel.CorrectionState.Failed -> Body(state.message)
+                    MainViewModel.CorrectionState.Idle -> Unit
+                }
+            }
+        },
+        confirmButton = {
+            when (state) {
+                is MainViewModel.CorrectionState.Loaded -> TextButton(
+                    onClick = { value?.let { vm.saveCorrection(state.correction, toCelsius(it)) } },
+                    enabled = value != null && abs(value) <= MAX_OFFSET,
+                ) { Text("Save") }
+                is MainViewModel.CorrectionState.Failed -> TextButton(onClick = { vm.readCorrection() }) { Text("Try again") }
+                is MainViewModel.CorrectionState.Saved -> TextButton(onClick = { vm.closeCorrection() }) { Text("Done") }
+                else -> Unit
+            }
+        },
+        dismissButton = {
+            if (state !is MainViewModel.CorrectionState.Saved) {
+                TextButton(onClick = { vm.closeCorrection() }) { Text("Cancel") }
+            }
+        },
+    )
+}
+
+/** Offsets beyond this (in the display unit) are almost certainly typos. */
+private const val MAX_OFFSET = 20.0
 
 @Composable
 private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
