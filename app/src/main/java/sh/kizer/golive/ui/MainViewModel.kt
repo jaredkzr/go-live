@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.kizer.golive.Bucket
+import sh.kizer.golive.ChartOptions
+import sh.kizer.golive.Smoothing
 import sh.kizer.golive.Csv
 import sh.kizer.golive.Metric
 import sh.kizer.golive.ReadingStore
@@ -25,13 +27,18 @@ import sh.kizer.golive.TrendRange
 import sh.kizer.golive.Window
 import sh.kizer.golive.repository
 
-/** A trend chart's data: buckets over a window plus the window's aggregates. */
+/**
+ * A trend chart's data: raw buckets over a window, the same buckets smoothed
+ * for drawing (index for index), and the window's raw aggregates.
+ */
 data class Trend(
     val metric: Metric,
     val range: TrendRange,
     val window: Window,
     val buckets: List<Bucket>,
+    val smoothed: List<Bucket>,
     val summary: Bucket?,
+    val options: ChartOptions,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -50,7 +57,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** The last 24 h of each metric in 15-minute buckets, for the tiles. */
     val sparklines: StateFlow<Map<Metric, List<Bucket>>> = repo.dataVersion
         .mapLatest {
-            val w = TrendRange.DAY_1.window(System.currentTimeMillis()).copy(bucketMs = SPARK_BUCKET_MS)
+            val w = TrendRange.DAY_1.window(System.currentTimeMillis(), SPARK_BUCKET_MS)
             Metric.entries.associateWith { store.series(it, w) }
         }
         .flowOn(Dispatchers.IO)
@@ -59,10 +66,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val trendMetric = MutableStateFlow(Metric.PM25)
     val trendRange = MutableStateFlow(TrendRange.DAY_1)
 
-    val trend: StateFlow<Trend?> = combine(trendMetric, trendRange, repo.dataVersion) { m, r, _ -> m to r }
-        .mapLatest { (metric, range) ->
-            val w = range.window(System.currentTimeMillis())
-            Trend(metric, range, w, store.series(metric, w), store.summary(metric, w))
+    val trend: StateFlow<Trend?> = combine(trendMetric, trendRange, repo.chartOptions, repo.dataVersion) { m, r, o, _ ->
+        Triple(m, r, o)
+    }
+        .mapLatest { (metric, range, options) ->
+            val w = range.window(System.currentTimeMillis(), options.resolution)
+            val buckets = store.series(metric, w)
+            val smoothed = Smoothing.smooth(buckets, w.bucketMs, options.method, options.strength.window)
+            Trend(metric, range, w, buckets, smoothed, store.summary(metric, w), options)
         }
         .flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

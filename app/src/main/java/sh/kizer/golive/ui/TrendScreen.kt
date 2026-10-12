@@ -25,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,6 +38,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.kizer.golive.Bucket
+import sh.kizer.golive.ChartOptions
+import sh.kizer.golive.Resampling
+import sh.kizer.golive.Resolution
+import sh.kizer.golive.SmoothingMethod
+import sh.kizer.golive.SmoothingStrength
 import sh.kizer.golive.Metric
 import sh.kizer.golive.Units
 import sh.kizer.golive.TrendRange
@@ -51,6 +57,7 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
     val range by vm.trendRange.collectAsStateWithLifecycle()
     val trend by vm.trend.collectAsStateWithLifecycle()
     val units by vm.repo.units.collectAsStateWithLifecycle()
+    val options by vm.repo.chartOptions.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
@@ -91,12 +98,11 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                 shape = RoundedCornerShape(16.dp),
             ) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 10.dp)) {
-                    val sel = t?.buckets?.getOrNull(selected ?: -1)
-                    Header(metric, t, sel, units)
+                    Header(metric, t, selected, units)
                     Box(Modifier.fillMaxWidth().height(260.dp).padding(top = 8.dp), contentAlignment = Alignment.Center) {
                         when {
                             t == null -> Text("Loading…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            t.buckets.isEmpty() -> Text("No readings in this range yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            t.smoothed.isEmpty() -> Text("No readings in this range yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             else -> TrendChart(t, units, selected, { selected = it }, Modifier.fillMaxSize())
                         }
                     }
@@ -116,22 +122,66 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            Text(
-                "Each point is the average over ${bucketName(range)}; the band spans the lowest and highest reading in it. " +
-                    "Touch and drag the chart to read values.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
+            DisplayOptions(options) { vm.repo.setChartOptions(it) }
+            t?.let {
+                Text(
+                    caption(it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Header(metric: Metric, trend: Trend?, selected: Bucket?, units: Units) {
+private fun DisplayOptions(options: ChartOptions, onChange: (ChartOptions) -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Smoothing", style = MaterialTheme.typography.titleSmall)
+            Choice(SmoothingMethod.entries.map { it.label }, options.method.ordinal) {
+                onChange(options.copy(method = SmoothingMethod.entries[it]))
+            }
+            if (options.method != SmoothingMethod.NONE) {
+                Choice(SmoothingStrength.entries.map { it.label }, options.strength.ordinal) {
+                    onChange(options.copy(strength = SmoothingStrength.entries[it]))
+                }
+            }
+            Text("Resolution", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
+            Choice(Resolution.entries.map { it.label }, options.resolution.ordinal) {
+                onChange(options.copy(resolution = Resolution.entries[it]))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Curved lines", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Switch(checked = options.curved, onCheckedChange = { onChange(options.copy(curved = it)) })
+            }
+        }
+    }
+}
+
+private fun caption(t: Trend): String {
+    val o = t.options
+    val smoothing = if (o.method == SmoothingMethod.NONE) {
+        "Not smoothed"
+    } else {
+        "Smoothed with ${o.method.description}, ${o.strength.window} points wide"
+    }
+    return "Each point averages ${Resampling.describe(t.window.bucketMs)}. $smoothing; the band spans the lowest " +
+        "and highest readings. The stats below use the raw readings. Touch and drag the chart to read values."
+}
+
+@Composable
+private fun Header(metric: Metric, trend: Trend?, selectedIndex: Int?, units: Units) {
+    val smoothed = selectedIndex?.let { trend?.smoothed?.getOrNull(it) }
+    val raw = selectedIndex?.let { trend?.buckets?.getOrNull(it) }
     val (big, small) = when {
-        selected != null && trend != null -> metric.formatWithUnit(selected.avg, units) to
-            "${bucketTime(trend, selected)} · ${metric.format(selected.min, units)}–${metric.formatWithUnit(selected.max, units)}"
+        smoothed != null && raw != null && trend != null -> metric.formatWithUnit(smoothed.avg, units) to
+            "${bucketTime(trend, raw)} · readings ${metric.format(raw.min, units)}–${metric.formatWithUnit(raw.max, units)}"
         trend?.summary != null -> metric.formatWithUnit(trend.summary.avg, units) to "Average over ${rangeName(trend.range)}"
         else -> "—" to " "
     }
@@ -155,19 +205,10 @@ private fun bucketTime(trend: Trend, b: Bucket): String {
     val end = Instant.ofEpochMilli(b.start + trend.window.bucketMs).atZone(zone)
     val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
     val day = DateTimeFormatter.ofPattern("EEE MMM d")
-    return when (trend.range) {
-        TrendRange.YEAR -> day.format(start)
-        else -> "${day.format(start)}, ${time.format(start)}–${time.format(end)}"
-    }
+    return if (trend.window.bucketMs >= DAY_MS) day.format(start) else "${day.format(start)}, ${time.format(start)}–${time.format(end)}"
 }
 
-private fun bucketName(range: TrendRange) = when (range) {
-    TrendRange.HOUR_1, TrendRange.HOURS_4 -> "a minute"
-    TrendRange.DAY_1 -> "5 minutes"
-    TrendRange.WEEK -> "30 minutes"
-    TrendRange.MONTH -> "2 hours"
-    TrendRange.YEAR -> "a day"
-}
+private const val DAY_MS = 24 * 60 * 60 * 1000L
 
 private fun rangeName(range: TrendRange) = when (range) {
     TrendRange.HOUR_1 -> "the last hour"

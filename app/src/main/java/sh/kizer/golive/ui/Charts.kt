@@ -24,18 +24,48 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import sh.kizer.golive.Axis
 import sh.kizer.golive.Bucket
+import sh.kizer.golive.Smoothing
 import sh.kizer.golive.Units
 import java.time.ZoneId
 import kotlin.math.abs
 
-/** Runs of buckets with no gap longer than 1.5 buckets, so outages show as breaks. */
-private fun runs(buckets: List<Bucket>, bucketMs: Long): List<List<Bucket>> {
-    val out = mutableListOf<MutableList<Bucket>>()
-    for (b in buckets) {
-        val run = out.lastOrNull()
-        if (run == null || b.start - run.last().start > bucketMs * 3 / 2) out += mutableListOf(b) else run += b
+/** Runs of buckets split only at real outages (Smoothing.gapMs), so those show as breaks. */
+private fun runs(buckets: List<Bucket>, bucketMs: Long) = Smoothing.runs(buckets, Smoothing.gapMs(bucketMs))
+
+/**
+ * Continues this path through [pts]: straight segments, or with [curved] a
+ * monotone cubic (Fritsch–Carlson) that never overshoots the points, so a
+ * curve can't invent peaks or dips. Starts with a move when [move].
+ */
+private fun Path.through(pts: List<Offset>, curved: Boolean, move: Boolean) {
+    if (move) moveTo(pts[0].x, pts[0].y) else lineTo(pts[0].x, pts[0].y)
+    val n = pts.size
+    if (!curved || n < 3) {
+        for (i in 1 until n) lineTo(pts[i].x, pts[i].y)
+        return
     }
-    return out
+    val dx = FloatArray(n - 1) { pts[it + 1].x - pts[it].x }
+    val slope = FloatArray(n - 1) { if (dx[it] == 0f) 0f else (pts[it + 1].y - pts[it].y) / dx[it] }
+    val tangent = FloatArray(n)
+    tangent[0] = slope[0]
+    tangent[n - 1] = slope[n - 2]
+    for (i in 1 until n - 1) {
+        tangent[i] = if (slope[i - 1] * slope[i] <= 0f) {
+            0f // a local peak or dip stays flat
+        } else {
+            val w1 = 2 * dx[i] + dx[i - 1]
+            val w2 = dx[i] + 2 * dx[i - 1]
+            (w1 + w2) / (w1 / slope[i - 1] + w2 / slope[i])
+        }
+    }
+    for (i in 0 until n - 1) {
+        val h = dx[i] / 3
+        cubicTo(
+            pts[i].x + h, pts[i].y + tangent[i] * h,
+            pts[i + 1].x - h, pts[i + 1].y - tangent[i + 1] * h,
+            pts[i + 1].x, pts[i + 1].y,
+        )
+    }
 }
 
 /** A tile's 24 h line: no axes, the latest point marked. */
@@ -56,8 +86,7 @@ fun Sparkline(buckets: List<Bucket>, bucketMs: Long, from: Long, to: Long, modif
                 drawCircle(color, 1.5.dp.toPx(), Offset(x(run[0].start), y(run[0].avg)))
                 continue
             }
-            val path = Path()
-            run.forEachIndexed { i, b -> if (i == 0) path.moveTo(x(b.start), y(b.avg)) else path.lineTo(x(b.start), y(b.avg)) }
+            val path = Path().apply { through(run.map { Offset(x(it.start), y(it.avg)) }, curved = true, move = true) }
             drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
         val last = buckets.last()
@@ -68,8 +97,9 @@ fun Sparkline(buckets: List<Bucket>, bucketMs: Long, from: Long, to: Long, modif
 }
 
 /**
- * The trend chart: bucket averages as a line over a min–max band, value ticks
- * on the left, time ticks below. Touch and drag to select a bucket.
+ * The trend chart: smoothed bucket averages as a line over a smoothed min–max
+ * band, value ticks on the left, time ticks below. Touch and drag to select a
+ * bucket (an index into both trend.buckets and trend.smoothed).
  */
 @Composable
 fun TrendChart(
@@ -84,7 +114,8 @@ fun TrendChart(
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = colors.onSurfaceVariant)
     val use24h = DateFormat.is24HourFormat(LocalContext.current)
     val w = trend.window
-    val buckets = trend.buckets
+    val buckets = trend.smoothed
+    val curved = trend.options.curved
     val convert = { v: Double -> trend.metric.display(v, units) }
     val timeTicks = remember(trend, use24h) { Axis.timeTicks(trend.range, w.from, w.to, ZoneId.systemDefault(), use24h) }
     val (lo, hi) = remember(trend, units) {
@@ -151,14 +182,12 @@ fun TrendChart(
                 continue
             }
             val band = Path().apply {
-                run.forEachIndexed { i, b -> if (i == 0) moveTo(xb(b), y(b.max)) else lineTo(xb(b), y(b.max)) }
-                run.asReversed().forEach { b -> lineTo(xb(b), y(b.min)) }
+                through(run.map { Offset(xb(it), y(it.max)) }, curved, move = true)
+                through(run.asReversed().map { Offset(xb(it), y(it.min)) }, curved, move = false)
                 close()
             }
             drawPath(band, colors.primary.copy(alpha = 0.16f))
-            val line = Path().apply {
-                run.forEachIndexed { i, b -> if (i == 0) moveTo(xb(b), y(b.avg)) else lineTo(xb(b), y(b.avg)) }
-            }
+            val line = Path().apply { through(run.map { Offset(xb(it), y(it.avg)) }, curved, move = true) }
             drawPath(line, colors.primary, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
 

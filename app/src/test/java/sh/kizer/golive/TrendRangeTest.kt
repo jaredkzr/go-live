@@ -12,26 +12,31 @@ class TrendRangeTest {
     @Test
     fun yearBucketsStartAtLocalMidnight() {
         val now = ZonedDateTime.of(2026, 10, 11, 15, 30, 0, 0, ZoneId.of("America/Los_Angeles")).toInstant().toEpochMilli()
-        val w = TrendRange.YEAR.window(now, la)
+        val w = TrendRange.YEAR.window(now, Resolution.NORMAL, zone = la)
         val midnight = ZonedDateTime.of(2026, 10, 12, 0, 0, 0, 0, ZoneId.of("America/Los_Angeles")).toInstant().toEpochMilli()
         assertEquals(midnight, w.to)
         assertEquals(w.to - TrendRange.YEAR.spanMs, w.from)
-        assertEquals(midnight - TrendRange.YEAR.bucketMs, Buckets.start(now, w.bucketMs, w.offsetMs))
+        assertEquals(24 * 60 * 60 * 1000L, w.bucketMs)
+        assertEquals(midnight - w.bucketMs, Buckets.start(now, w.bucketMs, w.offsetMs))
     }
 
     @Test
     fun dayWindowEndsAfterTheCurrentBucket() {
         val now = 1_000_000_123L
-        val w = TrendRange.DAY_1.window(now, TimeZone.getTimeZone("UTC"))
-        assertEquals(0L, w.to % TrendRange.DAY_1.bucketMs)
-        assertEquals(true, now < w.to && now >= w.to - TrendRange.DAY_1.bucketMs)
+        val w = TrendRange.DAY_1.window(now, Resolution.NORMAL, zone = TimeZone.getTimeZone("UTC"))
+        assertEquals(10 * 60 * 1000L, w.bucketMs)
+        assertEquals(0L, w.to % w.bucketMs)
+        assertEquals(true, now < w.to && now >= w.to - w.bucketMs)
     }
 
     @Test
-    fun bucketsStayBetweenSixtyAndFourHundred() {
-        for (r in TrendRange.entries) {
-            val n = r.spanMs / r.bucketMs
-            assertEquals("${r.name} has $n buckets", true, n in 60..400)
+    fun resolutionsKeepPointCountsReasonable() {
+        for (res in Resolution.entries) {
+            for (r in TrendRange.entries) {
+                val n = r.spanMs / Resampling.bucketFor(r.spanMs, res.targetPoints)
+                // A day is the largest bucket, so a year has 365 points even at Fine.
+                assertEquals("${r.name} at ${res.name} has $n buckets", true, n in 30..maxOf(res.targetPoints, 365))
+            }
         }
     }
 }

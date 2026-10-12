@@ -198,15 +198,17 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     }
 }
 
+/** A full-width segmented choice; no check mark, so four or more labels fit. */
 @Composable
-private fun Choice(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+fun Choice(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         labels.forEachIndexed { i, label ->
             SegmentedButton(
                 selected = i == selected,
                 onClick = { onSelect(i) },
                 shape = SegmentedButtonDefaults.itemShape(i, labels.size),
-                label = { Text(label) },
+                icon = {},
+                label = { Text(label, maxLines = 1, softWrap = false) },
             )
         }
     }
