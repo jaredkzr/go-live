@@ -13,6 +13,24 @@ class MetricTest {
     }
 
     @Test
+    fun pmBandsFollowTheFullEpaScale() {
+        assertEquals(Level.BAD, Metric.PM25.band(125.4)!!.level)
+        assertEquals(Level.VERY_BAD, Metric.PM25.band(125.5)!!.level)
+        assertEquals(Level.HAZARDOUS, Metric.PM25.band(225.5)!!.level)
+        assertEquals(Level.VERY_BAD, Metric.PM10.band(424.0)!!.level)
+        assertEquals(Level.HAZARDOUS, Metric.PM10.band(425.0)!!.level)
+    }
+
+    @Test
+    fun healthRangesCoverEveryBand() {
+        for (m in Metric.entries.filter { it.guidance != null }) {
+            for (b in m.bands) assert(b.range.isNotEmpty()) { "${m.label} ${b.label} has no range" }
+        }
+        assertEquals(listOf("0–50", "51–100", "101–150", "151–200", "201–300", "301+"), Metric.PM25.bands.map { it.aqi })
+        assertEquals(null, Metric.BATTERY.guidance)
+    }
+
+    @Test
     fun temperatureConvertsToFahrenheit() {
         assertEquals(74.228, Metric.TEMPERATURE.display(23.46, Units(fahrenheit = true)), 1e-9)
         assertEquals("°F", Metric.TEMPERATURE.unit(Units(fahrenheit = true)))

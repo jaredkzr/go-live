@@ -1,6 +1,7 @@
 package sh.kizer.golive.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.kizer.golive.Bucket
@@ -52,6 +56,7 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
     val range by vm.trendRange.collectAsStateWithLifecycle()
     val trend by vm.trend.collectAsStateWithLifecycle()
     val units by vm.repo.units.collectAsStateWithLifecycle()
+    val latest by vm.repo.latest.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<Int?>(null) }
 
     Scaffold(
@@ -116,6 +121,7 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
+            metric.guidance?.let { HealthRanges(metric, it, latest?.value(metric)) }
             t?.let {
                 Text(
                     caption(it),
@@ -146,6 +152,46 @@ private fun Header(metric: Metric, trend: Trend?, selectedIndex: Int?, units: Un
     Column(Modifier.padding(start = 4.dp)) {
         Text(big, style = MaterialTheme.typography.headlineSmall)
         Text(small, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The metric's health ranges, marking the one the latest reading falls in. */
+@Composable
+private fun HealthRanges(metric: Metric, guidance: String, latest: Double?) {
+    val current = latest?.let { metric.band(it) }
+    val unit = metric.unit(Units())
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Health ranges", style = MaterialTheme.typography.titleSmall)
+            for (band in metric.bands) {
+                val now = band == current
+                val weight = if (now) FontWeight.SemiBold else FontWeight.Normal
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(9.dp).background(band.level.color(), CircleShape))
+                    Text(
+                        if (now) "${band.label} · now" else band.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = weight,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("${band.range} $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = weight)
+                        band.aqi?.let {
+                            Text(
+                                "AQI $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            Text(guidance, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

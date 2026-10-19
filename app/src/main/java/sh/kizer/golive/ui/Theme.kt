@@ -60,4 +60,6 @@ fun Level.color(): Color = when (this) {
     Level.MODERATE -> Color(0xFFFAB219)
     Level.POOR -> Color(0xFFEC835A)
     Level.BAD -> Color(0xFFD03B3B)
+    Level.VERY_BAD -> Color(0xFF8F3F97)
+    Level.HAZARDOUS -> Color(0xFF7E0023)
 }
