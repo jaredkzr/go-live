@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -165,12 +166,24 @@ private fun HealthRanges(metric: Metric, guidance: String, latest: Double?) {
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shape = RoundedCornerShape(16.dp),
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Health ranges", style = MaterialTheme.typography.titleSmall)
+        // Rows pad themselves so the highlight can extend past the text; the
+        // title and note pad the same amount to stay aligned with the rows.
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Health ranges",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+            )
             for (band in metric.bands) {
                 val now = band == current
                 val weight = if (now) FontWeight.SemiBold else FontWeight.Normal
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                val highlight = if (now) band.level.color().copy(alpha = HIGHLIGHT_ALPHA) else Color.Transparent
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(highlight, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Box(Modifier.size(9.dp).background(band.level.color(), CircleShape))
                     Text(
                         if (now) "${band.label} · now" else band.label,
@@ -190,10 +203,18 @@ private fun HealthRanges(metric: Metric, guidance: String, latest: Double?) {
                     }
                 }
             }
-            Text(guidance, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                guidance,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp),
+            )
         }
     }
 }
+
+/** Tint of the current range's row: its status colour, faint enough to keep text readable. */
+private const val HIGHLIGHT_ALPHA = 0.18f
 
 @Composable
 private fun Stat(label: String, value: String, modifier: Modifier) {
