@@ -26,7 +26,7 @@ class ReadingStore(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
                 device TEXT NOT NULL,
                 packet_id INTEGER NOT NULL,
                 pm25 REAL, co2 REAL, temperature REAL, humidity REAL,
-                tvoc REAL, pm10 REAL, battery REAL, rssi INTEGER
+                pm1 REAL, pm10 REAL, battery REAL, rssi INTEGER
             )
             """.trimIndent(),
         )
@@ -34,8 +34,10 @@ class ReadingStore(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Version 2: PM10 replaced NOx. The nox column keeps its history unread.
+        // Version 2: PM10 replaced NOx; version 3: PM1.0 replaced TVOC. The
+        // retired nox and tvoc columns keep their history unread.
         if (oldVersion < 2) db.execSQL("ALTER TABLE readings ADD COLUMN pm10 REAL")
+        if (oldVersion < 3) db.execSQL("ALTER TABLE readings ADD COLUMN pm1 REAL")
     }
 
     fun insert(r: Reading) {
@@ -129,14 +131,14 @@ class ReadingStore(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
             device = getString(1),
             packetId = getInt(2),
             pm25 = d(3), co2 = d(4), temperature = d(5), humidity = d(6),
-            tvoc = d(7), pm10 = d(8), battery = d(9),
+            pm1 = d(7), pm10 = d(8), battery = d(9),
             rssi = if (isNull(10)) null else getInt(10),
         )
     }
 
     companion object {
         private const val NAME = "readings.db"
-        private const val VERSION = 2
-        private const val COLUMNS = "time, device, packet_id, pm25, co2, temperature, humidity, tvoc, pm10, battery, rssi"
+        private const val VERSION = 3
+        private const val COLUMNS = "time, device, packet_id, pm25, co2, temperature, humidity, pm1, pm10, battery, rssi"
     }
 }

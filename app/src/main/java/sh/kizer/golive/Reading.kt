@@ -8,22 +8,22 @@ data class Reading(
     val time: Long,
     val device: String,
     val packetId: Int,
+    val pm1: Double? = null,
     val pm25: Double? = null,
     val pm10: Double? = null,
     val co2: Double? = null,
     val temperature: Double? = null,
     val humidity: Double? = null,
-    val tvoc: Double? = null,
     val battery: Double? = null,
     val rssi: Int? = null,
 ) {
     fun value(metric: Metric): Double? = when (metric) {
+        Metric.PM1 -> pm1
         Metric.PM25 -> pm25
         Metric.PM10 -> pm10
         Metric.CO2 -> co2
         Metric.TEMPERATURE -> temperature
         Metric.HUMIDITY -> humidity
-        Metric.TVOC -> tvoc
         Metric.BATTERY -> battery
     }
 
@@ -32,12 +32,12 @@ data class Reading(
             time = time,
             device = device,
             packetId = packet.packetId ?: 0,
+            pm1 = packet.pm1,
             pm25 = packet.pm25,
             pm10 = packet.pm10,
             co2 = packet.co2,
             temperature = packet.temperature,
             humidity = packet.humidity,
-            tvoc = packet.tvoc,
             battery = packet.battery,
             rssi = rssi,
         )
@@ -67,6 +67,8 @@ enum class Metric(
             Band(Double.MAX_VALUE, Level.BAD, "Unhealthy"),
         ),
     ),
+    // No official PM1.0 bands, so no status.
+    PM1("pm1", "PM1.0", "µg/m³", 0, emptyList()),
     PM10(
         "pm10", "PM10", "µg/m³", 0,
         // US EPA PM10 breakpoints. The Go has no PM10 AQI, so it stays in µg/m³.
@@ -88,16 +90,6 @@ enum class Metric(
     ),
     TEMPERATURE("temperature", "Temperature", "°C", 1, emptyList()),
     HUMIDITY("humidity", "Humidity", "%", 0, emptyList()),
-    TVOC(
-        "tvoc", "TVOC index", "", 0,
-        // Sensirion VOC index: 100 is the typical background.
-        listOf(
-            Band(150.0, Level.GOOD, "Good"),
-            Band(250.0, Level.MODERATE, "Moderate"),
-            Band(400.0, Level.POOR, "Poor"),
-            Band(Double.MAX_VALUE, Level.BAD, "High"),
-        ),
-    ),
     BATTERY(
         "battery", "Battery", "%", 0,
         listOf(

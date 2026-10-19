@@ -20,12 +20,12 @@ class BthomeTest {
             0x0E, 0x12, 0x00,
             0x12, 0x67, 0x02,
             0x2E, 0x2E,
-            0x3D, 0x78, 0x00,
+            0x3D, 0x08, 0x00,
         )
         assertEquals(
             Bthome.Packet(
                 packetId = 7, battery = 87.0, temperature = 23.46, humidity = 46.0,
-                pm25 = 13.0, pm10 = 18.0, co2 = 615.0, tvoc = 120.0,
+                pm1 = 8.0, pm25 = 13.0, pm10 = 18.0, co2 = 615.0,
             ),
             Bthome.decode(data),
         )

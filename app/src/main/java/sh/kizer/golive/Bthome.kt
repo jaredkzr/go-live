@@ -6,9 +6,11 @@ import java.util.UUID
  * BTHome v2 decoder for the AirGradient Go broadcast (https://bthome.io/format/).
  *
  * Mirrors products/go/main/go_bthome.cpp in https://github.com/jaredkzr/firmware-core
- * and go-viewer/bthome.js on kizer.sh. The Go sends its TVOC index as a uint16
- * count (0x3D) and PM10 as 0x0E. Firmware before PM10 sent the NOx index as a
- * uint32 count (0x3E); it is still parsed so those packets decode, then dropped.
+ * and go-viewer/bthome.js on kizer.sh. The Go sends PM10 as 0x0E and, since
+ * BTHome has no PM1.0 object, PM1.0 (µg/m³) as a uint16 count (0x3D), which
+ * older firmware used for the TVOC index. Firmware before PM10 also sent the
+ * NOx index as a uint32 count (0x3E); it is still parsed so those packets
+ * decode, then dropped.
  */
 object Bthome {
     /** Service data UUID 0xFCD2. */
@@ -33,7 +35,7 @@ object Bthome {
         0x0E to Spec("pm10", 2, false, 1.0),
         0x12 to Spec("co2", 2, false, 1.0),
         0x2E to Spec("humidity", 1, false, 1.0),
-        0x3D to Spec("tvoc", 2, false, 1.0),
+        0x3D to Spec("pm1", 2, false, 1.0),
         0x3E to Spec("nox", 4, false, 1.0),
     )
 
@@ -42,15 +44,15 @@ object Bthome {
         val battery: Double? = null,
         val temperature: Double? = null,
         val humidity: Double? = null,
+        val pm1: Double? = null,
         val pm25: Double? = null,
         val pm10: Double? = null,
         val co2: Double? = null,
-        val tvoc: Double? = null,
         val trigger: Boolean = false,
         val truncated: Boolean = false,
     ) {
-        /** The Go always sends CO2, PM10 or a gas index; other BTHome sensors rarely do. */
-        val looksLikeGo: Boolean get() = co2 != null || tvoc != null || pm10 != null
+        /** The Go always sends CO2 or PM; other BTHome sensors rarely do. */
+        val looksLikeGo: Boolean get() = co2 != null || pm1 != null || pm10 != null
     }
 
     /**
@@ -83,10 +85,10 @@ object Bthome {
             battery = fields["battery"],
             temperature = fields["temperature"],
             humidity = fields["humidity"],
+            pm1 = fields["pm1"],
             pm25 = fields["pm25"],
             pm10 = fields["pm10"],
             co2 = fields["co2"],
-            tvoc = fields["tvoc"],
             trigger = info and DEVICE_INFO_TRIGGER != 0,
             truncated = truncated,
         )

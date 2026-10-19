@@ -13,10 +13,25 @@ import java.util.zip.GZIPOutputStream
  * copy compresses about tenfold, and a fresh install restores from it.
  */
 object Backup {
-    const val HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,pm10,battery,rssi"
+    const val HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,pm1,pm10,battery,rssi"
 
-    /** Backups from before PM10 replaced NOx: the same layout with NOx in PM10's place. */
-    const val LEGACY_HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,nox,battery,rssi"
+    /** Older backups: the same layout with retired fields in the PM slots, which restore empty. */
+    const val HEADER_TVOC_PM10 = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,pm10,battery,rssi"
+    const val HEADER_TVOC_NOX = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,nox,battery,rssi"
+
+    /** Which PM slots of a line hold PM1.0 and PM10. */
+    enum class Format(val hasPm1: Boolean, val hasPm10: Boolean) {
+        CURRENT(true, true),
+        TVOC_PM10(false, true),
+        TVOC_NOX(false, false),
+    }
+
+    private fun formatOf(header: String): Format? = when (header) {
+        HEADER -> Format.CURRENT
+        HEADER_TVOC_PM10 -> Format.TVOC_PM10
+        HEADER_TVOC_NOX -> Format.TVOC_NOX
+        else -> null
+    }
     private const val FIELDS = 11
 
     fun encode(r: Reading): String {
@@ -27,13 +42,13 @@ object Backup {
         }
         return listOf(
             r.time.toString(), r.device, r.packetId.toString(),
-            n(r.pm25), n(r.co2), n(r.temperature), n(r.humidity), n(r.tvoc), n(r.pm10), n(r.battery),
+            n(r.pm25), n(r.co2), n(r.temperature), n(r.humidity), n(r.pm1), n(r.pm10), n(r.battery),
             r.rssi?.toString() ?: "",
         ).joinToString(",")
     }
 
-    /** Null for the header or a line that doesn't parse. [legacy] lines drop their NOx. */
-    fun decode(line: String, legacy: Boolean = false): Reading? {
+    /** Null for a header or a line that doesn't parse. Retired fields of older [format]s are dropped. */
+    fun decode(line: String, format: Format = Format.CURRENT): Reading? {
         val f = line.split(',')
         if (f.size != FIELDS) return null
         val time = f[0].toLongOrNull() ?: return null
@@ -46,8 +61,8 @@ object Backup {
             co2 = f[4].toDoubleOrNull(),
             temperature = f[5].toDoubleOrNull(),
             humidity = f[6].toDoubleOrNull(),
-            tvoc = f[7].toDoubleOrNull(),
-            pm10 = if (legacy) null else f[8].toDoubleOrNull(),
+            pm1 = if (format.hasPm1) f[7].toDoubleOrNull() else null,
+            pm10 = if (format.hasPm10) f[8].toDoubleOrNull() else null,
             battery = f[9].toDoubleOrNull(),
             rssi = f[10].toIntOrNull(),
         )
@@ -73,10 +88,10 @@ object Backup {
     fun read(file: File, chunk: Int = 5000, sink: (List<Reading>) -> Unit) {
         GZIPInputStream(file.inputStream().buffered()).bufferedReader().use { input: BufferedReader ->
             val batch = ArrayList<Reading>(chunk)
-            var legacy = false
+            var format = Format.CURRENT
             input.lineSequence().mapNotNull { line ->
-                if (line == LEGACY_HEADER) legacy = true
-                decode(line, legacy)
+                formatOf(line)?.let { format = it }
+                decode(line, format)
             }.forEach {
                 batch += it
                 if (batch.size == chunk) {
