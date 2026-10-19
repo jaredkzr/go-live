@@ -26,14 +26,17 @@ class ReadingStore(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
                 device TEXT NOT NULL,
                 packet_id INTEGER NOT NULL,
                 pm25 REAL, co2 REAL, temperature REAL, humidity REAL,
-                tvoc REAL, nox REAL, battery REAL, rssi INTEGER
+                tvoc REAL, pm10 REAL, battery REAL, rssi INTEGER
             )
             """.trimIndent(),
         )
         db.execSQL("CREATE INDEX readings_time ON readings(time)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Version 2: PM10 replaced NOx. The nox column keeps its history unread.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE readings ADD COLUMN pm10 REAL")
+    }
 
     fun insert(r: Reading) {
         val values = ContentValues().apply {
@@ -126,14 +129,14 @@ class ReadingStore(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
             device = getString(1),
             packetId = getInt(2),
             pm25 = d(3), co2 = d(4), temperature = d(5), humidity = d(6),
-            tvoc = d(7), nox = d(8), battery = d(9),
+            tvoc = d(7), pm10 = d(8), battery = d(9),
             rssi = if (isNull(10)) null else getInt(10),
         )
     }
 
     companion object {
         private const val NAME = "readings.db"
-        private const val VERSION = 1
-        private const val COLUMNS = "time, device, packet_id, pm25, co2, temperature, humidity, tvoc, nox, battery, rssi"
+        private const val VERSION = 2
+        private const val COLUMNS = "time, device, packet_id, pm25, co2, temperature, humidity, tvoc, pm10, battery, rssi"
     }
 }

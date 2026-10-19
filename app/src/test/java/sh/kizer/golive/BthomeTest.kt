@@ -17,18 +17,26 @@ class BthomeTest {
             0x01, 0x57,
             0x02, 0x2A, 0x09,
             0x0D, 0x0D, 0x00,
+            0x0E, 0x12, 0x00,
             0x12, 0x67, 0x02,
             0x2E, 0x2E,
             0x3D, 0x78, 0x00,
-            0x3E, 0x01, 0x00, 0x00, 0x00,
         )
         assertEquals(
             Bthome.Packet(
                 packetId = 7, battery = 87.0, temperature = 23.46, humidity = 46.0,
-                pm25 = 13.0, co2 = 615.0, tvoc = 120.0, nox = 1.0,
+                pm25 = 13.0, pm10 = 18.0, co2 = 615.0, tvoc = 120.0,
             ),
             Bthome.decode(data),
         )
+    }
+
+    @Test
+    fun skipsNoxFromOlderFirmware() {
+        val p = Bthome.decode(bytes(0x40, 0x00, 0x07, 0x3E, 0x01, 0x00, 0x00, 0x00, 0x2E, 0x2E))!!
+        assertEquals(false, p.truncated)
+        assertEquals(46.0, p.humidity!!, 1e-9)
+        assertNull(p.pm10)
     }
 
     @Test

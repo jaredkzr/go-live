@@ -7,7 +7,8 @@ import java.util.UUID
  *
  * Mirrors products/go/main/go_bthome.cpp in https://github.com/jaredkzr/firmware-core
  * and go-viewer/bthome.js on kizer.sh. The Go sends its TVOC index as a uint16
- * count (0x3D) and its NOx index as a uint32 count (0x3E).
+ * count (0x3D) and PM10 as 0x0E. Firmware before PM10 sent the NOx index as a
+ * uint32 count (0x3E); it is still parsed so those packets decode, then dropped.
  */
 object Bthome {
     /** Service data UUID 0xFCD2. */
@@ -42,14 +43,14 @@ object Bthome {
         val temperature: Double? = null,
         val humidity: Double? = null,
         val pm25: Double? = null,
+        val pm10: Double? = null,
         val co2: Double? = null,
         val tvoc: Double? = null,
-        val nox: Double? = null,
         val trigger: Boolean = false,
         val truncated: Boolean = false,
     ) {
-        /** The Go always sends CO2 or a gas index; other BTHome sensors rarely do. */
-        val looksLikeGo: Boolean get() = co2 != null || tvoc != null || nox != null
+        /** The Go always sends CO2, PM10 or a gas index; other BTHome sensors rarely do. */
+        val looksLikeGo: Boolean get() = co2 != null || tvoc != null || pm10 != null
     }
 
     /**
@@ -83,9 +84,9 @@ object Bthome {
             temperature = fields["temperature"],
             humidity = fields["humidity"],
             pm25 = fields["pm25"],
+            pm10 = fields["pm10"],
             co2 = fields["co2"],
             tvoc = fields["tvoc"],
-            nox = fields["nox"],
             trigger = info and DEVICE_INFO_TRIGGER != 0,
             truncated = truncated,
         )

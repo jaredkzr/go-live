@@ -9,7 +9,7 @@ import java.nio.file.Files
 class BackupTest {
     private val full = Reading(
         time = 1_791_763_200_000, device = "10:BD:A3:E5:10:1A", packetId = 7,
-        pm25 = 13.0, co2 = 615.0, temperature = 23.46, humidity = 46.0, tvoc = 120.0, nox = 1.0, battery = 87.0, rssi = -61,
+        pm25 = 13.0, co2 = 615.0, temperature = 23.46, humidity = 46.0, tvoc = 120.0, pm10 = 18.0, battery = 87.0, rssi = -61,
     )
     private val sparse = Reading(time = 1_791_763_260_000, device = "10:BD:A3:E5:10:1A", packetId = 8, co2 = 620.0)
 
@@ -19,6 +19,21 @@ class BackupTest {
         assertEquals(sparse, Backup.decode(Backup.encode(sparse)))
         assertNull(Backup.decode(Backup.HEADER))
         assertNull(Backup.decode("garbage"))
+        assertNull(Backup.decode(Backup.LEGACY_HEADER))
+    }
+
+    @Test
+    fun legacyBackupDropsNox() {
+        val dir = Files.createTempDirectory("backup").toFile()
+        val file = File(dir, "readings.csv.gz")
+        java.util.zip.GZIPOutputStream(file.outputStream()).bufferedWriter().use {
+            it.appendLine(Backup.LEGACY_HEADER)
+            it.appendLine("1791763200000,10:BD:A3:E5:10:1A,7,13,615,23.46,46,120,1,87,-61")
+        }
+        val back = mutableListOf<Reading>()
+        Backup.read(file) { back += it }
+        assertEquals(listOf(full.copy(pm10 = null)), back)
+        dir.deleteRecursively()
     }
 
     @Test

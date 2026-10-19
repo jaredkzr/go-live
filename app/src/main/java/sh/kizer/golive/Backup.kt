@@ -13,7 +13,10 @@ import java.util.zip.GZIPOutputStream
  * copy compresses about tenfold, and a fresh install restores from it.
  */
 object Backup {
-    const val HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,nox,battery,rssi"
+    const val HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,pm10,battery,rssi"
+
+    /** Backups from before PM10 replaced NOx: the same layout with NOx in PM10's place. */
+    const val LEGACY_HEADER = "time_ms,device,packet_id,pm25,co2,temperature,humidity,tvoc,nox,battery,rssi"
     private const val FIELDS = 11
 
     fun encode(r: Reading): String {
@@ -24,13 +27,13 @@ object Backup {
         }
         return listOf(
             r.time.toString(), r.device, r.packetId.toString(),
-            n(r.pm25), n(r.co2), n(r.temperature), n(r.humidity), n(r.tvoc), n(r.nox), n(r.battery),
+            n(r.pm25), n(r.co2), n(r.temperature), n(r.humidity), n(r.tvoc), n(r.pm10), n(r.battery),
             r.rssi?.toString() ?: "",
         ).joinToString(",")
     }
 
-    /** Null for the header or a line that doesn't parse. */
-    fun decode(line: String): Reading? {
+    /** Null for the header or a line that doesn't parse. [legacy] lines drop their NOx. */
+    fun decode(line: String, legacy: Boolean = false): Reading? {
         val f = line.split(',')
         if (f.size != FIELDS) return null
         val time = f[0].toLongOrNull() ?: return null
@@ -44,7 +47,7 @@ object Backup {
             temperature = f[5].toDoubleOrNull(),
             humidity = f[6].toDoubleOrNull(),
             tvoc = f[7].toDoubleOrNull(),
-            nox = f[8].toDoubleOrNull(),
+            pm10 = if (legacy) null else f[8].toDoubleOrNull(),
             battery = f[9].toDoubleOrNull(),
             rssi = f[10].toIntOrNull(),
         )
@@ -70,7 +73,11 @@ object Backup {
     fun read(file: File, chunk: Int = 5000, sink: (List<Reading>) -> Unit) {
         GZIPInputStream(file.inputStream().buffered()).bufferedReader().use { input: BufferedReader ->
             val batch = ArrayList<Reading>(chunk)
-            input.lineSequence().mapNotNull(::decode).forEach {
+            var legacy = false
+            input.lineSequence().mapNotNull { line ->
+                if (line == LEGACY_HEADER) legacy = true
+                decode(line, legacy)
+            }.forEach {
                 batch += it
                 if (batch.size == chunk) {
                     sink(batch.toList())

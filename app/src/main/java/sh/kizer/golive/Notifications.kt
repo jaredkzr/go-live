@@ -31,8 +31,8 @@ object Notifications {
             else -> if (r == null) {
                 "Listening for the Go" to "Waiting for its first broadcast."
             } else {
-                summary(r, f, listOf(Metric.PM25, Metric.CO2)) to
-                    summary(r, f, listOf(Metric.TEMPERATURE, Metric.HUMIDITY, Metric.TVOC, Metric.NOX))
+                summary(r, f, listOf(Metric.PM25, Metric.PM10, Metric.CO2)) to
+                    summary(r, f, listOf(Metric.TEMPERATURE, Metric.HUMIDITY, Metric.TVOC))
             }
         }
         val open = PendingIntent.getActivity(
@@ -65,8 +65,7 @@ object Notifications {
             r.value(m)?.let { v ->
                 val label = when (m) {
                     Metric.TVOC -> "TVOC "
-                    Metric.NOX -> "NOx "
-                    Metric.PM25, Metric.CO2 -> m.label + " "
+                    Metric.PM25, Metric.PM10, Metric.CO2 -> m.label + " "
                     else -> ""
                 }
                 label + m.formatWithUnit(v, units)

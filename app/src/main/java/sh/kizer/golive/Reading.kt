@@ -9,21 +9,21 @@ data class Reading(
     val device: String,
     val packetId: Int,
     val pm25: Double? = null,
+    val pm10: Double? = null,
     val co2: Double? = null,
     val temperature: Double? = null,
     val humidity: Double? = null,
     val tvoc: Double? = null,
-    val nox: Double? = null,
     val battery: Double? = null,
     val rssi: Int? = null,
 ) {
     fun value(metric: Metric): Double? = when (metric) {
         Metric.PM25 -> pm25
+        Metric.PM10 -> pm10
         Metric.CO2 -> co2
         Metric.TEMPERATURE -> temperature
         Metric.HUMIDITY -> humidity
         Metric.TVOC -> tvoc
-        Metric.NOX -> nox
         Metric.BATTERY -> battery
     }
 
@@ -33,11 +33,11 @@ data class Reading(
             device = device,
             packetId = packet.packetId ?: 0,
             pm25 = packet.pm25,
+            pm10 = packet.pm10,
             co2 = packet.co2,
             temperature = packet.temperature,
             humidity = packet.humidity,
             tvoc = packet.tvoc,
-            nox = packet.nox,
             battery = packet.battery,
             rssi = rssi,
         )
@@ -67,6 +67,16 @@ enum class Metric(
             Band(Double.MAX_VALUE, Level.BAD, "Unhealthy"),
         ),
     ),
+    PM10(
+        "pm10", "PM10", "µg/m³", 0,
+        // US EPA PM10 breakpoints. The Go has no PM10 AQI, so it stays in µg/m³.
+        listOf(
+            Band(54.0, Level.GOOD, "Good"),
+            Band(154.0, Level.MODERATE, "Moderate"),
+            Band(254.0, Level.POOR, "Unhealthy for sensitive"),
+            Band(Double.MAX_VALUE, Level.BAD, "Unhealthy"),
+        ),
+    ),
     CO2(
         "co2", "CO₂", "ppm", 0,
         listOf(
@@ -85,16 +95,6 @@ enum class Metric(
             Band(150.0, Level.GOOD, "Good"),
             Band(250.0, Level.MODERATE, "Moderate"),
             Band(400.0, Level.POOR, "Poor"),
-            Band(Double.MAX_VALUE, Level.BAD, "High"),
-        ),
-    ),
-    NOX(
-        "nox", "NOx index", "", 0,
-        // Sensirion NOx index: 1 is the typical background.
-        listOf(
-            Band(20.0, Level.GOOD, "Good"),
-            Band(150.0, Level.MODERATE, "Moderate"),
-            Band(300.0, Level.POOR, "Poor"),
             Band(Double.MAX_VALUE, Level.BAD, "High"),
         ),
     ),
