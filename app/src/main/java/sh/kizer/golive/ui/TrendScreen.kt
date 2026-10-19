@@ -122,7 +122,7 @@ fun TrendScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            metric.guidance?.let { HealthRanges(metric, it, latest?.value(metric)) }
+            metric.guidance?.let { HealthRanges(metric, it, latest?.value(metric), units) }
             t?.let {
                 Text(
                     caption(it),
@@ -156,11 +156,16 @@ private fun Header(metric: Metric, trend: Trend?, selectedIndex: Int?, units: Un
     }
 }
 
-/** The metric's health ranges, marking the one the latest reading falls in. */
+/**
+ * The metric's health ranges, marking the one the latest reading falls in.
+ * The first line of each range is in the unit the app shows, the second in
+ * the other one (µg/m³ and US AQI for PM).
+ */
 @Composable
-private fun HealthRanges(metric: Metric, guidance: String, latest: Double?) {
+private fun HealthRanges(metric: Metric, guidance: String, latest: Double?, units: Units) {
     val current = latest?.let { metric.band(it) }
     val unit = metric.unit(Units())
+    val aqiFirst = metric.showsUsAqi(units)
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -191,11 +196,17 @@ private fun HealthRanges(metric: Metric, guidance: String, latest: Double?) {
                         fontWeight = weight,
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
+                    val concentration = "${band.range} $unit"
+                    val (first, second) = when {
+                        band.aqi == null -> concentration to null
+                        aqiFirst -> "${band.aqi} US AQI" to concentration
+                        else -> concentration to "AQI ${band.aqi}"
+                    }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("${band.range} $unit", style = MaterialTheme.typography.bodyMedium, fontWeight = weight)
-                        band.aqi?.let {
+                        Text(first, style = MaterialTheme.typography.bodyMedium, fontWeight = weight)
+                        second?.let {
                             Text(
-                                "AQI $it",
+                                it,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

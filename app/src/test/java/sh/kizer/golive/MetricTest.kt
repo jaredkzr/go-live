@@ -36,4 +36,11 @@ class MetricTest {
         assertEquals("°F", Metric.TEMPERATURE.unit(Units(fahrenheit = true)))
         assertEquals("µg/m³", Metric.PM25.unit(Units(fahrenheit = true)))
     }
+
+    @Test
+    fun onlyPm25ShowsUsAqi() {
+        assertEquals(true, Metric.PM25.showsUsAqi(Units(pmUsAqi = true)))
+        assertEquals(false, Metric.PM25.showsUsAqi(Units()))
+        assertEquals(false, Metric.PM10.showsUsAqi(Units(pmUsAqi = true)))
+    }
 }

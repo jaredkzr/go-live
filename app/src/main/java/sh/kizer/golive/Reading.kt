@@ -134,16 +134,19 @@ enum class Metric(
 
     fun band(value: Double): Band? = bands.firstOrNull { value <= it.upTo }
 
+    /** True when values show as US AQI instead of µg/m³ (PM2.5 when the Go is set to US AQI). */
+    fun showsUsAqi(units: Units): Boolean = this == PM25 && units.pmUsAqi
+
     fun unit(units: Units): String = when {
         this == TEMPERATURE && units.fahrenheit -> "°F"
-        this == PM25 && units.pmUsAqi -> "US AQI"
+        showsUsAqi(units) -> "US AQI"
         else -> unit
     }
 
     /** Converts a stored value (°C, µg/m³) to the unit shown. */
     fun display(value: Double, units: Units): Double = when {
         this == TEMPERATURE && units.fahrenheit -> value * 9 / 5 + 32
-        this == PM25 && units.pmUsAqi -> Aqi.fromPm25(value).toDouble()
+        showsUsAqi(units) -> Aqi.fromPm25(value).toDouble()
         else -> value
     }
 
